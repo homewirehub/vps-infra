@@ -19,7 +19,8 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+      # Static Traefik options map to TRAEFIK_<SECTION>_<KEY> in upper snake case.
+      TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
       TZ: ${TZ:-UTC}
     volumes:
       # Read-only: Traefik only needs to watch container events, never to

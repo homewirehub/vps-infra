@@ -149,14 +149,34 @@ echo "--- 3. Firewall (nftables) ---"
 NFT_PRESENT=no
 command -v nft >/dev/null 2>&1 && NFT_PRESENT=yes
 
-if [ "$NFT_PRESENT" = "yes" ] && nft list ruleset 2>/dev/null | grep -q 'chain input'; then
-  ok "ruleset already present"
+REPO_RULES="$SCRIPT_DIR/nftables.conf"
+if [ ! -f "$REPO_RULES" ]; then
+  warn "$REPO_RULES not found - run this script from its repository checkout"
+  echo; echo "=============================================="; exit 1
+fi
+
+# Presence is not the same as being current. Comparing the installed file
+# against the repository copy is what makes a second run an actual drift
+# check instead of a no-op that hides a stale ruleset.
+RULES_CURRENT=no
+[ -f "$NFT_CONF" ] && cmp -s "$REPO_RULES" "$NFT_CONF" && RULES_CURRENT=yes
+RULES_LOADED=no
+[ "$NFT_PRESENT" = "yes" ] && nft list chain inet filter input >/dev/null 2>&1 && RULES_LOADED=yes
+
+if [ "$RULES_CURRENT" = "yes" ] && [ "$RULES_LOADED" = "yes" ]; then
+  ok "ruleset installed, loaded, and identical to the repository copy"
 else
   if [ "$MODE" = "check" ]; then
     [ "$NFT_PRESENT" = "no" ] && todo "install the nftables package (not present in this image)"
-    todo "install nftables ruleset: inbound SSH(22) + ICMP + established only"
-    todo "  80/443 stay CLOSED until something is actually served"
-    todo "  auto-rollback after 10 minutes in case it locks you out"
+    if [ ! -f "$NFT_CONF" ]; then
+      todo "install $NFT_CONF from the repository"
+      todo "  80/443 stay CLOSED until something is actually served"
+      todo "  auto-rollback after 10 minutes in case it locks you out"
+    elif [ "$RULES_CURRENT" = "no" ]; then
+      todo "$NFT_CONF DIFFERS from the repository copy and would be replaced:"
+      diff -u "$NFT_CONF" "$REPO_RULES" 2>/dev/null | tail -n +3 | head -20 | sed 's/^/            /'
+    fi
+    [ "$RULES_LOADED" = "no" ] && todo "load the ruleset and enable it at boot"
   else
     if [ "$NFT_PRESENT" = "no" ]; then
       export DEBIAN_FRONTEND=noninteractive
@@ -170,11 +190,7 @@ else
       fi
     fi
     [ -f "$NFT_CONF" ] && cp -a "$NFT_CONF" "$BACKUP/" 2>/dev/null
-    if [ ! -f "$SCRIPT_DIR/nftables.conf" ]; then
-      warn "$SCRIPT_DIR/nftables.conf not found - run this script from its repository checkout"
-      echo; echo "=============================================="; exit 1
-    fi
-    install -m 0755 "$SCRIPT_DIR/nftables.conf" "$NFT_CONF"
+    install -m 0755 "$REPO_RULES" "$NFT_CONF"
     if nft -c -f "$NFT_CONF" 2>/dev/null; then
       # Dead man's switch: wipes the ruleset in 10 minutes unless --confirm runs.
       systemd-run --unit="$ROLLBACK_UNIT" --on-active=600 \
