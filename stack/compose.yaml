@@ -1,0 +1,67 @@
+# Edge stack: one reverse proxy, one site behind it.
+#
+# Everything a service needs to become routable is expressed as labels on that
+# service. Adding a second site means adding a service block - no proxy config
+# is touched.
+
+name: edge
+
+networks:
+  edge:
+    name: edge
+
+services:
+  traefik:
+    image: traefik:v3.3
+    restart: unless-stopped
+    networks: [edge]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+      TZ: ${TZ:-UTC}
+    volumes:
+      # Read-only: Traefik only needs to watch container events, never to
+      # control the daemon. A writable socket here would be root on the host.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/acme.json:/acme/acme.json
+      - traefik-logs:/var/log/traefik
+    labels:
+      traefik.enable: "true"
+      # Dashboard bound to the tailnet address only. Traefik still terminates
+      # TLS for it, but the listener is not reachable from the public internet.
+      traefik.http.routers.dashboard.rule: "Host(`${SITE_HOST:?set SITE_HOST in .env}`) && PathPrefix(`/traefik`)"
+      traefik.http.routers.dashboard.service: "api@internal"
+      traefik.http.routers.dashboard.middlewares: "dashboard-auth,dashboard-strip"
+      traefik.http.middlewares.dashboard-strip.stripprefix.prefixes: "/traefik"
+      # Placeholder credentials are deliberately absent: generate a hash with
+      #   htpasswd -nbB admin '<password>'
+      # and put the result in .env as DASHBOARD_AUTH.
+      traefik.http.middlewares.dashboard-auth.basicauth.users: "${DASHBOARD_AUTH:?set DASHBOARD_AUTH in .env}"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  site:
+    build: ./site
+    restart: unless-stopped
+    networks: [edge]
+    environment:
+      TZ: ${TZ:-UTC}
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.site.rule: "Host(`${SITE_HOST}`)"
+      traefik.http.services.site.loadbalancer.server.port: "8080"
+      traefik.http.routers.site.middlewares: "security-headers"
+      traefik.http.middlewares.security-headers.headers.stsSeconds: "31536000"
+      traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains: "true"
+      traefik.http.middlewares.security-headers.headers.contentTypeNosniff: "true"
+      traefik.http.middlewares.security-headers.headers.frameDeny: "true"
+      traefik.http.middlewares.security-headers.headers.referrerPolicy: "strict-origin-when-cross-origin"
+
+volumes:
+  traefik-logs:

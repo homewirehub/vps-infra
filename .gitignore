@@ -1,0 +1,9 @@
+# Real values live here, never in the repo.
+.env
+
+# Traefik writes the ACME account key and issued certificates here.
+stack/traefik/acme.json
+
+# Local scratch
+*.bak
+*.log

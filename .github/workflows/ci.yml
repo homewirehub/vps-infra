@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck --severity=warning bootstrap/*.sh
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose file
+        # The compose file intentionally fails without a populated .env, so
+        # the example values stand in for CI.
+        run: |
+          cp .env.example .env
+          echo 'DASHBOARD_AUTH=ci:$2y$05$ci.placeholder.hash.value.for.validation' >> .env
+          docker compose -f stack/compose.yaml --env-file .env config >/dev/null
+          echo "compose file is valid"
+
+  nftables:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check ruleset syntax
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq nftables
+          sudo nft -c -f bootstrap/nftables.conf
+          echo "ruleset syntax is valid"

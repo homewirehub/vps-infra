@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Infrastructure Lab</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #151b23; --line: #232c37;
+    --text: #d8dee6; --dim: #8b96a5; --accent: #58a6ff;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 3rem 1.5rem; background: var(--bg); color: var(--text);
+    font: 16px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 46rem; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin: 0 0 .3rem; letter-spacing: -.01em; }
+  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .09em;
+       color: var(--dim); margin: 2.75rem 0 .9rem; font-weight: 600; }
+  .lede { color: var(--dim); margin: 0 0 .5rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  td { padding: .6rem .75rem; border-bottom: 1px solid var(--line);
+       vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { color: var(--dim); width: 12rem; white-space: nowrap; }
+  code, .mono { font-family: var(--mono); font-size: .88em; }
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 10px; padding: .4rem .5rem; }
+  ul { padding-left: 1.1rem; margin: 0; }
+  li { margin-bottom: .55rem; }
+  li strong { color: var(--text); font-weight: 600; }
+  a { color: var(--accent); }
+  footer { margin-top: 3.5rem; padding-top: 1.25rem;
+           border-top: 1px solid var(--line); color: var(--dim);
+           font-size: .84rem; }
+</style>
+</head>
+<body>
+<main>
+
+  <h1>Infrastructure Lab</h1>
+  <p class="lede">
+    A single Debian host, rebuilt from scratch and described entirely in a
+    public Git repository. This page is served by that description.
+  </p>
+
+  <h2>Host</h2>
+  <div class="panel"><table>
+    <tr><td>OS</td><td>Debian 13 (trixie), minimal cloud image</td></tr>
+    <tr><td>Provider</td><td>Hostinger KVM, São Paulo</td></tr>
+    <tr><td>Edge</td><td>Traefik v3 &middot; automatic TLS via Let's Encrypt</td></tr>
+    <tr><td>Private access</td><td>Tailscale (WireGuard) &middot; SSH by key only</td></tr>
+    <tr><td>Firewall</td><td>nftables &middot; default-deny inbound</td></tr>
+  </table></div>
+
+  <h2>How it is built</h2>
+  <ul>
+    <li>
+      <strong>Reproducible, not remembered.</strong> Hardening is a single
+      idempotent script with a report mode that changes nothing and an apply
+      mode that does. Running it twice is a no-op, so it doubles as a drift
+      check.
+    </li>
+    <li>
+      <strong>Reversible before it is permanent.</strong> The firewall arms a
+      dead man's switch when it activates: without an explicit confirmation
+      from a session that still works, the ruleset removes itself after ten
+      minutes. Locking yourself out is not a possible outcome.
+    </li>
+    <li>
+      <strong>Scoped, not global.</strong> The ruleset replaces only its own
+      nftables table. Tailscale and Docker install tables of their own at
+      runtime, and a global flush would quietly delete them — a failure that
+      only surfaces at the next reboot.
+    </li>
+    <li>
+      <strong>Services declare themselves.</strong> Routing, TLS and security
+      headers live in each service's Docker labels. Adding a site does not
+      mean editing the proxy.
+    </li>
+    <li>
+      <strong>No secrets in the repository.</strong> Hostnames, contact
+      addresses and credentials come from an environment file that is never
+      committed. The repository describes the shape of the system, not this
+      particular instance of it.
+    </li>
+  </ul>
+
+  <h2>Deliberate limits</h2>
+  <ul>
+    <li>
+      Automatic updates install security patches but never reboot on their own.
+      An unattended reboot is how a healthy stack becomes an outage at 4am.
+    </li>
+    <li>
+      Ports for services are opened when a service exists to answer on them —
+      not in advance.
+    </li>
+    <li>
+      Container images are pinned to a minor version, so a rebuild picks up
+      patches without silently changing major versions.
+    </li>
+  </ul>
+
+  <footer>
+    Built and operated as a working reference. The repository is the source of
+    truth; this page is generated from the same commit that configures the
+    host.
+  </footer>
+
+</main>
+</body>
+</html>

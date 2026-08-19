@@ -1,0 +1,57 @@
+# Traefik static configuration.
+#
+# "Static" means everything that requires a restart to change. Anything that
+# describes a *service* lives in that service's Docker labels instead, so a
+# new service never means editing this file.
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+accessLog:
+  filePath: /var/log/traefik/access.log
+  # Health checks would otherwise dominate the log.
+  filters:
+    statusCodes:
+      - "400-599"
+
+api:
+  # The dashboard is reachable through the tailnet only - see the labels in
+  # compose.yaml. It is never published on the public entrypoints.
+  dashboard: true
+  insecure: false
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    # Containers must opt in with traefik.enable=true. Without this, every
+    # container that happens to expose a port becomes routable by accident.
+    exposedByDefault: false
+    network: edge
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "{{ env "ACME_EMAIL" }}"
+      storage: /acme/acme.json
+      # TLS-ALPN needs only port 443, so the HTTP->HTTPS redirect above cannot
+      # interfere with the challenge the way an HTTP-01 challenge would.
+      tlsChallenge: {}
