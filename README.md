@@ -33,6 +33,16 @@ What it does:
 | Updates | unattended security upgrades, no automatic reboot |
 | Hygiene | LLMNR off, journal capped, base tooling installed |
 
+`bootstrap/docker.sh` follows the same shape and installs Docker Engine from
+the upstream repository, because Debian's own `docker.io` package lags and
+ships no compose plugin. It also caps container logs: the default `json-file`
+driver has no size limit at all, so a chatty container can fill a disk.
+
+```sh
+bash bootstrap/docker.sh          # report only
+bash bootstrap/docker.sh --apply  # install
+```
+
 ### The dead man's switch
 
 Activating a firewall over the same SSH connection it might block is the
